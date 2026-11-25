@@ -130,7 +130,7 @@ const ACTS = [
     prompt:"Se poteste assumere un collaboratore digitale disponibile 24 ore su 24, che lavoro gli affidereste?",
     hint:"Scrivi un compito vero del tuo lavoro: quello noioso, ripetitivo o che ti ruba tempo." },
 
-  { id:"B", title:"Quiz iniziale", sub:"5 domande · vero o falso", type:"mc", scored:true,
+  { id:"B", title:"Quiz iniziale", sub:"5 domande · vero o falso", type:"mc", scored:true, resultsOnly:true,
     items:[
       { q:"ChatGPT pensa come un essere umano.", o:["Vero","Falso"], c:1,
         e:"Non pensa: prevede le parole più probabili in base agli schemi che ha imparato da enormi quantità di testi." },
@@ -795,6 +795,51 @@ function presAct(id){
     i < n - 1 ? h("button",{class:"btn alt",onclick:()=>render(i + 1)},"Avanti ›") : (extra || h("button",{class:"btn alt",disabled:true},"Avanti ›")));
 
   if(a.type === "mc"){
+    if(a.resultsOnly){
+      const top = presTop(title + " · risultati", "/relatore");
+      const counter = h("div",{class:"step"});
+      const box = h("div");
+      mount(top, h("div",{class:"wrap fade"},
+        h("div",{class:"card"},h("div",{class:"q",style:"margin-bottom:8px"},"Risultati per partecipante"),counter),
+        box));
+      setLive(top, () => {
+        const resp = dig(LIVE,["risposte",a.id]) || {};
+        const names = people();
+        const pids = new Set();
+        Object.keys(resp).forEach(i => Object.keys(resp[i] || {}).forEach(pid => pids.add(pid)));
+        const rows = [...pids].map(pid => {
+          let ok = 0, answered = 0; const wrong = [];
+          a.items.forEach((it, i) => {
+            const v = resp[i] ? resp[i][pid] : undefined;
+            if(v === undefined || v === null) return;
+            answered++;
+            if(v === it.c) ok++; else wrong.push({i, it, v});
+          });
+          const n = names[pid] || (dig(LIVE,["punti",a.id,pid,"n"])) || "Senza nome";
+          return {n:String(n), ok, answered, wrong};
+        }).sort((x, y) => (y.ok - x.ok) || (y.answered - x.answered) || x.n.localeCompare(y.n));
+        counter.textContent = rows.length + " partecipanti hanno risposto · " + rows.filter(r => r.answered === a.items.length).length + " hanno finito";
+        box.innerHTML = "";
+        if(!rows.length){ box.appendChild(h("div",{class:"card"},h("p",{class:"muted"},"In attesa delle risposte…"))); return; }
+        rows.forEach((r, k) => {
+          const card = h("div",{class:"card" + (k === 0 && r.ok > 0 ? " hl" : ""),style:"margin-bottom:14px"},
+            h("div",{style:"display:flex;justify-content:space-between;align-items:baseline;gap:16px"},
+              h("div",{style:"font-size:30px;font-weight:800"},(k + 1) + ". " + r.n),
+              h("div",{style:"font-size:30px;font-weight:800;color:var(--brand)"},r.ok + "/" + a.items.length)),
+            r.answered < a.items.length ? h("div",{class:"muted",style:"font-size:18px"},"Ha risposto a " + r.answered + (r.answered === 1 ? " domanda su " : " domande su ") + a.items.length) : null);
+          if(!r.wrong.length){
+            card.appendChild(h("div",{style:"font-size:22px;font-weight:700;color:var(--ok);margin-top:8px"}, r.answered ? "✓ Nessuna risposta sbagliata" : "Nessuna risposta ancora"));
+          }else{
+            r.wrong.forEach(w => card.appendChild(h("div",{style:"font-size:20px;line-height:1.4;margin-top:10px;padding-left:30px;position:relative"},
+              h("span",{style:"position:absolute;left:0;font-weight:800;color:var(--ko)"},"✗"),
+              h("b",null,"D" + (w.i + 1) + ". " + w.it.q + " "),
+              "Ha risposto «" + (w.it.o[w.v] || "?") + "», giusta: «" + w.it.o[w.it.c] + "».")));
+          }
+          box.appendChild(card);
+        });
+      });
+      return;
+    }
     const ranking = () => {
       const top = presTop(title + " · classifica", "/relatore");
       const box = h("div");
