@@ -158,20 +158,20 @@ const ACTS = [
     minutes:[15,30,60,120,240] },
 
   { id:"E", title:"Prompt Battle", sub:"Costruisci il tuo prompt", type:"builder",
-    email:{ from:"Jonas Weber · Weber Schaltanlagen GmbH (Germania)", subject:"Anfrage Datenblatt Motorschutzrelais",
-      text:"Sehr geehrte Damen und Herren,\n\nwir planen eine neue Serie von Schaltschränken und interessieren uns für Ihr thermisches Überlastrelais für Motoren bis 25 A. Könnten Sie uns bitte das technische Datenblatt und Informationen zu den verfügbaren Einstellbereichen schicken?\n\nMit freundlichen Grüßen\nJonas Weber",
-      gist:"In sintesi: un potenziale cliente tedesco chiede la scheda tecnica e i campi di regolazione del nostro relè termico per motori fino a 25 A." },
+    email:{ from:"Paolo Bertolino · Bertolino Quadri Elettrici (Cuneo)", subject:"Richiesta scheda tecnica relè termico",
+      text:"Buongiorno,\n\nstiamo progettando una nuova serie di quadri elettrici per pompe e siamo interessati al vostro relè termico per motori fino a 25 A. Potreste inviarci la scheda tecnica e indicarci i campi di regolazione disponibili?\n\nGrazie e buona giornata,\nPaolo Bertolino",
+      gist:"In sintesi: un potenziale cliente chiede la scheda tecnica e i campi di regolazione del nostro relè termico per motori fino a 25 A." },
     blocks:[
       { k:"ruolo", t:"Ruolo", q:"Chi deve essere ChatGPT?", multi:false, o:[
         ["Agisci come un assistente.",1],
         ["Agisci come l’avvocato dell’azienda, attento a non concedere nulla al cliente.",0],
-        ["Agisci come un commerciale di Ghisalba S.p.A. esperto nel rispondere ai clienti esteri.",2],
+        ["Agisci come un commerciale di Ghisalba S.p.A. esperto nel rispondere alle richieste dei clienti.",2],
         ["Agisci come un copywriter creativo che vuole stupire il cliente.",0] ]},
       { k:"contesto", t:"Contesto", q:"Qual è la situazione?", multi:false, o:[
-        ["Jonas Weber è un nostro cliente storico con il contratto in scadenza e chiede uno sconto.",0],
-        ["Ghisalba produce componenti per il comando motore. Un potenziale cliente tedesco, Jonas Weber, chiede la scheda tecnica e i campi di regolazione del nostro relè termico per motori fino a 25 A.",2],
+        ["Paolo Bertolino è un nostro cliente storico con il contratto in scadenza e chiede uno sconto.",0],
+        ["Ghisalba produce componenti per il comando motore. Un potenziale cliente, Paolo Bertolino, chiede la scheda tecnica e i campi di regolazione del nostro relè termico per motori fino a 25 A.",2],
         ["Un cliente ci ha scritto.",1],
-        ["Il cliente è italiano e ha bisogno di un preventivo urgente.",0] ]},
+        ["Il cliente scrive per un reclamo su un ordine in ritardo.",0] ]},
       { k:"obiettivo", t:"Obiettivo", q:"Quale risultato vuoi?", multi:false, o:[
         ["Invia subito al cliente un’offerta con i prezzi.",0],
         ["Scrivi una risposta.",1],
@@ -192,8 +192,8 @@ const ACTS = [
         ["Usa solo le informazioni del catalogo pubblico.",1] ]},
       { k:"formato", t:"Formato", q:"In che forma vuoi la risposta?", multi:false, o:[
         ["Una risposta breve.",1],
-        ["Email in tedesco, tono professionale, massimo 150 parole, con oggetto.",2],
-        ["Email in italiano, tanto il cliente la traduce.",0],
+        ["Email in italiano, tono professionale, massimo 150 parole, con oggetto.",2],
+        ["Email in inglese, così sembriamo più internazionali.",0],
         ["Un testo lungo e dettagliato, più parole possibile.",0] ]}
     ]},
 
@@ -863,7 +863,7 @@ function presAct(id){
     mount(top, h("div",{class:"wrap fade"},
       h("div",{class:"card"},
         h("div",{class:"step"},"Rispondete dal telefono · attività E"),
-        h("div",{class:"q"},"Costruite il prompt per rispondere al cliente tedesco: attenti alle trappole!"),
+        h("div",{class:"q"},"Costruite il prompt per rispondere al cliente: attenti alle trappole!"),
         counter),
       tabs,
       h("div",{class:"card",style:"margin-top:16px"},box),
