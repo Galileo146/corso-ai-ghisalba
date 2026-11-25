@@ -157,8 +157,45 @@ const ACTS = [
              "Preparare report e riepiloghi","Scrivere in lingua straniera","Aggiornare tabelle Excel"],
     minutes:[15,30,60,120,240] },
 
-  { id:"E", title:"Prompt Battle", sub:"Vota le due squadre", type:"vote",
-    teams:["Squadra A","Squadra B"], criteria:["Precisione","Completezza","Tono","Nessuna invenzione"] },
+  { id:"E", title:"Prompt Battle", sub:"Costruisci il tuo prompt", type:"builder",
+    email:{ from:"Jonas Weber · Weber Schaltanlagen GmbH (Germania)", subject:"Anfrage Datenblatt Motorschutzrelais",
+      text:"Sehr geehrte Damen und Herren,\n\nwir planen eine neue Serie von Schaltschränken und interessieren uns für Ihr thermisches Überlastrelais für Motoren bis 25 A. Könnten Sie uns bitte das technische Datenblatt und Informationen zu den verfügbaren Einstellbereichen schicken?\n\nMit freundlichen Grüßen\nJonas Weber",
+      gist:"In sintesi: un potenziale cliente tedesco chiede la scheda tecnica e i campi di regolazione del nostro relè termico per motori fino a 25 A." },
+    blocks:[
+      { k:"ruolo", t:"Ruolo", q:"Chi deve essere ChatGPT?", multi:false, o:[
+        ["Agisci come un assistente.",1],
+        ["Agisci come l’avvocato dell’azienda, attento a non concedere nulla al cliente.",0],
+        ["Agisci come un commerciale di Ghisalba S.p.A. esperto nel rispondere ai clienti esteri.",2],
+        ["Agisci come un copywriter creativo che vuole stupire il cliente.",0] ]},
+      { k:"contesto", t:"Contesto", q:"Qual è la situazione?", multi:false, o:[
+        ["Jonas Weber è un nostro cliente storico con il contratto in scadenza e chiede uno sconto.",0],
+        ["Ghisalba produce componenti per il comando motore. Un potenziale cliente tedesco, Jonas Weber, chiede la scheda tecnica e i campi di regolazione del nostro relè termico per motori fino a 25 A.",2],
+        ["Un cliente ci ha scritto.",1],
+        ["Il cliente è italiano e ha bisogno di un preventivo urgente.",0] ]},
+      { k:"obiettivo", t:"Obiettivo", q:"Quale risultato vuoi?", multi:false, o:[
+        ["Invia subito al cliente un’offerta con i prezzi.",0],
+        ["Scrivi una risposta.",1],
+        ["Convinci il cliente a ordinare oggi stesso.",0],
+        ["Prepara una bozza di risposta che un collega approverà prima dell’invio.",2] ]},
+      { k:"istruzioni", t:"Istruzioni", q:"Come deve lavorare? Puoi sceglierne più di una.", multi:true, o:[
+        ["Ringrazia il cliente per l’interesse.",1],
+        ["Se un dato non lo conosci, inventalo per non far aspettare il cliente.",-2],
+        ["Indica che gli invieremo la scheda tecnica ufficiale.",1],
+        ["Chiedi per quale applicazione gli serve e quante unità prevede.",1],
+        ["Prometti la consegna entro 48 ore.",-2],
+        ["Riassumi la sua richiesta in una frase.",1] ]},
+      { k:"vincoli", t:"Vincoli", q:"Che cosa non deve fare? Puoi sceglierne più di una.", multi:true, o:[
+        ["Offri uno sconto del 10% per chiudere subito.",-2],
+        ["Non inventare prezzi, disponibilità o dati tecnici.",2],
+        ["Non condividere listini o documenti interni.",1],
+        ["Non citare mai la scheda tecnica.",-1],
+        ["Usa solo le informazioni del catalogo pubblico.",1] ]},
+      { k:"formato", t:"Formato", q:"In che forma vuoi la risposta?", multi:false, o:[
+        ["Una risposta breve.",1],
+        ["Email in tedesco, tono professionale, massimo 150 parole, con oggetto.",2],
+        ["Email in italiano, tanto il cliente la traduce.",0],
+        ["Un testo lungo e dettagliato, più parole possibile.",0] ]}
+    ]},
 
   { id:"F", title:"Posso caricarlo?", sub:"Il semaforo dei documenti · 6 casi", type:"mc", scored:true, sem:true,
     items:[
@@ -329,7 +366,7 @@ function home(){
 function runAct(id){
   const a = ACTS.find(x => x.id === id);
   if(!a) return go("/");
-  ({ open:actOpen, mc:actMC, cat:actCat, time:actTime, vote:actVote })[a.type](a);
+  ({ open:actOpen, mc:actMC, cat:actCat, time:actTime, vote:actVote, builder:actBuilder })[a.type](a);
 }
 
 /* --- A: risposta aperta --- */
@@ -518,7 +555,94 @@ function actTime(a){
         send)));
 }
 
-/* --- E: voto Prompt Battle --- */
+
+/* --- E: Prompt Battle con il costruttore di prompt --- */
+const BUILDER_MAX = 16;
+function composePrompt(a, pick, extra){
+  const B = a.blocks, get = k => B.find(b => b.k === k);
+  const one = k => get(k).o[pick[k]][0];
+  const many = k => pick[k].map(i => "- " + get(k).o[i][0]).join("\n");
+  let t = one("ruolo") + "\n\n" + one("contesto") + "\n\nObiettivo: " + one("obiettivo") +
+    "\n\nIstruzioni:\n" + many("istruzioni") + "\n\nVincoli:\n" + many("vincoli") + "\n\nFormato: " + one("formato");
+  if(extra) t += "\n\nNota aggiuntiva: " + extra;
+  t += "\n\nEcco l’email del cliente:\n" + a.email.text;
+  return t;
+}
+function scorePrompt(a, pick){
+  let sc = 0;
+  a.blocks.forEach(b => { if(b.multi) pick[b.k].forEach(i => sc += b.o[i][1]); else sc += b.o[pick[b.k]][1]; });
+  return Math.max(0, Math.min(BUILDER_MAX, sc));
+}
+function emailCard(a){
+  return h("div",{class:"card"},
+    h("div",{class:"step"},"L’email arrivata a Ghisalba"),
+    h("div",{style:"font-weight:700;margin-bottom:2px"},a.email.from),
+    h("div",{class:"muted",style:"font-size:15px;margin-bottom:10px"},"Oggetto: " + a.email.subject),
+    h("div",{style:"white-space:pre-line;background:#f3f6f9;border-radius:10px;padding:12px 14px;font-size:15px;line-height:1.45"},a.email.text),
+    h("p",{style:"margin:12px 0 0;font-weight:600"},a.email.gist));
+}
+function actBuilder(a){
+  const prev = S.res[a.id];
+  const sent = (r) => mount(topbar(a.title,"/"),
+    h("div",{class:"wrap fade"},
+      h("div",{class:"card center"},
+        h("div",{class:"step"},"Prompt inviato"),
+        h("div",{class:"q",style:"margin-bottom:6px"},"Ben fatto, " + S.name + "!"),
+        h("p",{class:"muted",style:"margin:0"},"La classifica arriva sul proiettore.")),
+      h("div",{class:"card"},h("div",{class:"step"},"Il tuo prompt"),
+        h("div",{style:"white-space:pre-line;font-size:15px;line-height:1.45"},r.p)),
+      h("button",{class:"btn alt",onclick:()=>{ delete S.res[a.id]; save(); actBuilder(a); }},"Modifica e reinvia"),
+      h("button",{class:"btn",onclick:()=>go("/")},"Torna al menu")));
+  if(prev) return sent(prev);
+
+  const pick = {}; a.blocks.forEach(b => pick[b.k] = b.multi ? [] : null);
+  const extra = h("input",{type:"text",maxlength:"200",placeholder:"Facoltativa: aggiungi una frase tua"});
+  const go2 = h("button",{class:"btn",disabled:true,onclick:()=>preview()},"Componi il mio prompt");
+  const check = () => { go2.disabled = !a.blocks.every(b => b.multi ? pick[b.k].length > 0 : pick[b.k] !== null); };
+  const blocks = a.blocks.map((b, bi) => {
+    const btns = b.o.map((o, i) => {
+      const el = h("button",{class:"opt",style:"font-size:16px;font-weight:600;padding:13px 14px",onclick:()=>{
+        if(b.multi){ const j = pick[b.k].indexOf(i); if(j >= 0) pick[b.k].splice(j, 1); else pick[b.k].push(i); el.classList.toggle("sel"); }
+        else { pick[b.k] = i; btns.forEach(x => x.classList.remove("sel")); el.classList.add("sel"); }
+        check();
+      }}, o[0]);
+      return el;
+    });
+    return h("div",{class:"card"},
+      h("div",{class:"step"},(bi + 1) + " di 6 · " + b.t),
+      h("div",{style:"font-weight:700;font-size:19px;margin-bottom:12px"},b.q),
+      h("div",{class:"opts"},btns));
+  });
+  const preview = () => {
+    const ex = extra.value.trim().slice(0, 200);
+    const p = composePrompt(a, pick, ex);
+    const sc = scorePrompt(a, pick);
+    const sel = a.blocks.map(b => b.k[0] + ":" + (b.multi ? pick[b.k].join(".") : pick[b.k])).join(" ");
+    mount(topbar(a.title,"/"),
+      h("div",{class:"wrap fade"},
+        h("div",{class:"card"},h("div",{class:"step"},"Ecco il prompt che hai costruito"),
+          h("div",{style:"white-space:pre-line;font-size:15px;line-height:1.45"},p)),
+        h("p",{class:"muted",style:"font-size:15px"},"Rileggilo: è quello che riceverebbe ChatGPT. Ti convince?"),
+        h("button",{class:"btn alt",onclick:()=>actBuilder(a)},"Ricomincia le scelte"),
+        h("button",{class:"btn",onclick:()=>{
+          const r = {p, sc}; S.res[a.id] = r; save();
+          put("prompt/" + S.pid, {n:S.name, p:p.slice(0, 2500), sc:sc, sel:sel.slice(0, 200)});
+          sent(r);
+        }},"Invia il mio prompt")));
+  };
+  mount(topbar(a.title,"/"),
+    h("div",{class:"wrap fade"},
+      h("div",{class:"hero"},
+        h("div",{class:"kicker"},"Prompt Battle"),
+        h("h2",{style:"font-size:22px"},"Costruisci il prompt per rispondere a questa email"),
+        h("p",null,"Per ogni ingrediente scegli la voce giusta. Attenzione: ci sono delle trappole!")),
+      emailCard(a),
+      blocks,
+      h("div",{class:"card"},h("div",{class:"step"},"Tocco personale"),extra),
+      go2));
+}
+
+/* --- E (vecchia versione a squadre, non usata) --- */
 function actVote(a){
   const votes = a.teams.map(() => a.criteria.map(() => 0));
   const send = h("button",{class:"btn",disabled:true,onclick:()=>{
@@ -704,6 +828,63 @@ function presAct(id){
     return render(0);
   }
 
+
+  if(a.type === "builder"){
+    const top = presTop(title, "/relatore");
+    const counter = h("div",{class:"step"});
+    const box = h("div");
+    let mode = "names";
+    const entries = () => Object.values(LIVE.prompt || {}).filter(e => e && e.p);
+    const judgeText = () => {
+      const list = entries();
+      let t = "PROMPT BATTLE · Workshop «AI at Work» · Ghisalba S.p.A. · 26 novembre 2026\n\n";
+      t += "COMPITO PER IL GIUDICE\nValuta ciascun prompt scritto dai partecipanti per rispondere all’email qui sotto. Per ognuno dei 6 ingredienti (ruolo, contesto, obiettivo, istruzioni, vincoli, formato) assegna 0, 1 o 2 punti: 0 se manca o è sbagliato, 1 se è vago, 2 se è chiaro e corretto. Togli 2 punti per ogni istruzione che spinge a inventare dati, promettere tempi o concedere sconti, e 1 punto per ogni scelta incoerente con il cliente (lingua, tono, fatti sbagliati). Aggiungi fino a 2 punti per una nota aggiuntiva davvero utile. Restituisci: una tabella con nome, punteggio e un commento di una riga; la classifica; il prompt migliore e perché, in tre righe adatte a essere lette in aula.\n\n";
+      t += "EMAIL DEL CLIENTE\nDa: " + a.email.from + "\nOggetto: " + a.email.subject + "\n" + a.email.text + "\n(" + a.email.gist + ")\n\n";
+      t += "PROMPT DEI PARTECIPANTI (" + list.length + ")\n";
+      list.forEach((e, i) => { t += "\n----- " + (i + 1) + ". " + e.n + " -----\n" + String(e.p).replace(/\n\nEcco l’email del cliente:[\s\S]*$/, "") + "\n"; });
+      t += "\nPUNTEGGIO AUTOMATICO DELLA PAGINA (solo come riferimento, su " + BUILDER_MAX + ")\n";
+      list.slice().sort((x, y) => y.sc - x.sc).forEach(e => { t += "- " + e.n + ": " + e.sc + "\n"; });
+      return t;
+    };
+    const dl = h("button",{class:"btn accent",onclick:()=>{
+      const blob = new Blob([judgeText()], {type:"text/plain;charset=utf-8"});
+      const u = URL.createObjectURL(blob); const l = document.createElement("a");
+      l.href = u; l.download = "prompt-battle-ghisalba.txt"; document.body.appendChild(l); l.click(); l.remove();
+      setTimeout(() => URL.revokeObjectURL(u), 2000);
+    }},"Scarica i prompt per il giudice (.txt)");
+    const cp = h("button",{class:"btn alt",onclick:async()=>{
+      try{ await navigator.clipboard.writeText(judgeText()); cp.textContent = "Copiato!"; }catch(e){ cp.textContent = "Copia non riuscita: usa Scarica"; }
+      setTimeout(() => { cp.textContent = "Copia negli appunti"; }, 2500);
+    }},"Copia negli appunti");
+    const tabs = h("div",{class:"row"},
+      h("button",{class:"btn alt",onclick:()=>{ mode = "names"; window.__liveUpdate(); }},"Chi ha inviato"),
+      h("button",{class:"btn alt",onclick:()=>{ mode = "prompts"; window.__liveUpdate(); }},"Mostra i prompt"),
+      h("button",{class:"btn alt",onclick:()=>{ mode = "rank"; window.__liveUpdate(); }},"Classifica automatica"));
+    mount(top, h("div",{class:"wrap fade"},
+      h("div",{class:"card"},
+        h("div",{class:"step"},"Rispondete dal telefono · attività E"),
+        h("div",{class:"q"},"Costruite il prompt per rispondere al cliente tedesco: attenti alle trappole!"),
+        counter),
+      tabs,
+      h("div",{class:"card",style:"margin-top:16px"},box),
+      h("div",{class:"row"},dl,cp)));
+    setLive(top, () => {
+      const list = entries();
+      counter.textContent = list.length + " prompt inviati su " + nPeople() + " collegati";
+      box.innerHTML = "";
+      if(!list.length){ box.appendChild(h("p",{class:"muted"},"In attesa dei prompt…")); return; }
+      if(mode === "names"){
+        const c = h("div",{class:"chips"}); list.forEach(e => c.appendChild(h("span",{class:"chip big"},"✓ " + e.n))); box.appendChild(c);
+      }else if(mode === "prompts"){
+        list.forEach(e => box.appendChild(h("div",{class:"answer"},h("div",{class:"who2"},String(e.n)),
+          h("div",{style:"white-space:pre-line;font-size:20px;line-height:1.4"},String(e.p).replace(/\n\nEcco l’email del cliente:[\s\S]*$/, "")))));
+      }else{
+        box.appendChild(rankList(list.slice().sort((x, y) => (y.sc - x.sc) || String(x.n).localeCompare(String(y.n))), e => e.sc + "/" + BUILDER_MAX));
+        box.appendChild(h("p",{class:"muted",style:"margin-top:12px"},"Punteggio automatico delle scelte. Il giudizio finale arriva dal giudice con il file scaricato."));
+      }
+    });
+    return;
+  }
   const top = presTop(title, "/relatore");
   const box = h("div");
   const prompt = a.type === "open" ? a.prompt
