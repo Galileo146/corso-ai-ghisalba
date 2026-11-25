@@ -573,6 +573,37 @@ function scorePrompt(a, pick){
   a.blocks.forEach(b => { if(b.multi) pick[b.k].forEach(i => sc += b.o[i][1]); else sc += b.o[pick[b.k]][1]; });
   return Math.max(0, Math.min(BUILDER_MAX, sc));
 }
+
+function analyzePrompt(a, sel){
+  const picks = {};
+  String(sel || "").split(" ").forEach(tok => { const m = tok.split(":"); if(m.length === 2) picks[m[0]] = m[1]; });
+  const out = [];
+  a.blocks.forEach(b => {
+    const raw = picks[b.k[0]];
+    if(raw == null || raw === "" || raw === "null"){ out.push({lvl:"ko", t:b.t + ": nessuna scelta."}); return; }
+    if(!b.multi){
+      const i = parseInt(raw, 10), o = b.o[i]; if(!o) return;
+      const best = b.o.find(x => x[1] === 2);
+      if(o[1] === 0) out.push({lvl:"ko", t:b.t + ": «" + o[0] + "» è una trappola. Meglio: «" + best[0] + "»"});
+      else if(o[1] === 1) out.push({lvl:"warn", t:b.t + ": «" + o[0] + "» è troppo vago. Meglio: «" + best[0] + "»"});
+    }else{
+      const chosen = raw.split(".").map(x => parseInt(x, 10)).filter(x => b.o[x]);
+      chosen.forEach(i => { if(b.o[i][1] < 0) out.push({lvl:"ko", t:b.t + ": «" + b.o[i][0] + "» è una trappola, va tolta."}); });
+      const missing = b.o.map((o, i) => ({o, i})).filter(x => x.o[1] > 0 && chosen.indexOf(x.i) < 0);
+      missing.filter(x => x.o[1] >= 2).forEach(x => out.push({lvl:"ko", t:b.t + ": mancava la regola più importante, «" + x.o[0] + "»"}));
+      const small = missing.filter(x => x.o[1] === 1);
+      if(small.length) out.push({lvl:"warn", t:b.t + ": potevi aggiungere " + small.map(x => "«" + x.o[0] + "»").join(" e ")});
+    }
+  });
+  return out;
+}
+function adviceLine(issues){
+  const ko = issues.filter(x => x.lvl === "ko").length, w = issues.filter(x => x.lvl === "warn").length;
+  if(!issues.length) return "Prompt perfetto: tutti gli ingredienti giusti e nessuna trappola.";
+  if(ko === 0) return "Nessuna trappola: per migliorare, rendi più precise le parti vaghe.";
+  return ko + (ko === 1 ? " errore da correggere" : " errori da correggere") + (w ? " e " + w + (w === 1 ? " miglioramento" : " miglioramenti") : "") + ": parti dalle trappole.";
+}
+
 function emailCard(a){
   return h("div",{class:"card"},
     h("div",{class:"step"},"L’email arrivata a Ghisalba"),
@@ -844,6 +875,12 @@ function presAct(id){
       list.forEach((e, i) => { t += "\n----- " + (i + 1) + ". " + e.n + " -----\n" + String(e.p).replace(/\n\nEcco l’email del cliente:[\s\S]*$/, "") + "\n"; });
       t += "\nPUNTEGGIO AUTOMATICO DELLA PAGINA (solo come riferimento, su " + BUILDER_MAX + ")\n";
       list.slice().sort((x, y) => y.sc - x.sc).forEach(e => { t += "- " + e.n + ": " + e.sc + "\n"; });
+      t += "\nANALISI AUTOMATICA DELLE SCELTE (errori e miglioramenti per partecipante)\n";
+      list.forEach(e => {
+        const iss = analyzePrompt(a, e.sel);
+        t += "\n" + e.n + " — " + adviceLine(iss) + "\n";
+        iss.forEach(x => { t += (x.lvl === "ko" ? "  ✗ " : "  △ ") + x.t + "\n"; });
+      });
       return t;
     };
     const dl = h("button",{class:"btn accent",onclick:()=>{
@@ -859,7 +896,8 @@ function presAct(id){
     const tabs = h("div",{class:"row"},
       h("button",{class:"btn alt",onclick:()=>{ mode = "names"; window.__liveUpdate(); }},"Chi ha inviato"),
       h("button",{class:"btn alt",onclick:()=>{ mode = "prompts"; window.__liveUpdate(); }},"Mostra i prompt"),
-      h("button",{class:"btn alt",onclick:()=>{ mode = "rank"; window.__liveUpdate(); }},"Classifica automatica"));
+      h("button",{class:"btn alt",onclick:()=>{ mode = "rank"; window.__liveUpdate(); }},"Classifica automatica"),
+      h("button",{class:"btn alt",onclick:()=>{ mode = "feedback"; window.__liveUpdate(); }},"Errori e consigli"));
     mount(top, h("div",{class:"wrap fade"},
       h("div",{class:"card"},
         h("div",{class:"step"},"Rispondete dal telefono · attività E"),
@@ -878,6 +916,18 @@ function presAct(id){
       }else if(mode === "prompts"){
         list.forEach(e => box.appendChild(h("div",{class:"answer"},h("div",{class:"who2"},String(e.n)),
           h("div",{style:"white-space:pre-line;font-size:20px;line-height:1.4"},String(e.p).replace(/\n\nEcco l’email del cliente:[\s\S]*$/, "")))));
+      }else if(mode === "feedback"){
+        list.slice().sort((x, y) => (y.sc - x.sc) || String(x.n).localeCompare(String(y.n))).forEach(e => {
+          const iss = analyzePrompt(a, e.sel);
+          const card = h("div",{class:"answer"},
+            h("div",{style:"display:flex;justify-content:space-between;align-items:baseline;gap:12px"},
+              h("div",{class:"who2",style:"font-size:18px"},String(e.n)),
+              h("div",{style:"font-weight:800;color:var(--brand)"},e.sc + "/" + BUILDER_MAX)),
+            h("div",{style:"font-weight:700;font-size:21px;margin:4px 0 8px"},adviceLine(iss)));
+          iss.forEach(x => card.appendChild(h("div",{style:"font-size:19px;line-height:1.4;margin:6px 0;padding-left:30px;position:relative"},
+            h("span",{style:"position:absolute;left:0;font-weight:800;color:" + (x.lvl === "ko" ? "var(--ko)" : "#B57800")}, x.lvl === "ko" ? "✗" : "△"), x.t)));
+          box.appendChild(card);
+        });
       }else{
         box.appendChild(rankList(list.slice().sort((x, y) => (y.sc - x.sc) || String(x.n).localeCompare(String(y.n))), e => e.sc + "/" + BUILDER_MAX));
         box.appendChild(h("p",{class:"muted",style:"margin-top:12px"},"Punteggio automatico delle scelte. Il giudizio finale arriva dal giudice con il file scaricato."));
